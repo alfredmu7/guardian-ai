@@ -14,6 +14,7 @@ static const char* _STREAM_CONTENT_TYPE = "multipart/x-mixed-replace; boundary="
 static const char* _STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
 static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
 
+// Handler para el Stream continuo MJPEG
 static esp_err_t stream_handler(httpd_req_t *req) {
   camera_fb_t * fb = NULL;
   esp_err_t res = ESP_OK;
@@ -48,10 +49,24 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     fb = NULL;
 
     if (res != ESP_OK) break;
-
-    // Pausa mínima para permitir que la pila TCP transmita sin congelar el búfer
     delay(1);
   }
+  return res;
+}
+
+// Handler para tomar una FOTO estática bajo demanda (/capture)
+static esp_err_t capture_handler(httpd_req_t *req) {
+  camera_fb_t * fb = esp_camera_fb_get();
+  if (!fb) {
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(req, "image/jpeg");
+  httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
+  esp_err_t res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+
+  esp_camera_fb_return(fb);
   return res;
 }
 
@@ -74,10 +89,12 @@ void startCameraServer() {
 
   httpd_uri_t index_uri = { .uri = "/", .method = HTTP_GET, .handler = index_handler, .user_ctx = NULL };
   httpd_uri_t stream_uri = { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL };
+  httpd_uri_t capture_uri = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
 
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &index_uri);
     httpd_register_uri_handler(stream_httpd, &stream_uri);
+    httpd_register_uri_handler(stream_httpd, &capture_uri);
   }
 }
 
@@ -104,14 +121,14 @@ void setup() {
   config.pin_sccb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 10000000; // 10MHz
+  config.xclk_freq_hz = 10000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
   if (psramFound()) {
     config.frame_size = FRAMESIZE_VGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
-    config.grab_mode = CAMERA_GRAB_LATEST; // Mantiene actualizado el último cuadro
+    config.grab_mode = CAMERA_GRAB_LATEST;
   } else {
     config.frame_size = FRAMESIZE_QVGA;
     config.jpeg_quality = 12;
