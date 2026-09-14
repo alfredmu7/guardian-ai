@@ -11,11 +11,10 @@ from app.services.yolo_service import YOLOService
 router = APIRouter()
 yolo_service = YOLOService()
 
-# Almacena el último frame anotado procesado desde el WebSocket
 latest_annotated_frame = None
 
 def process_yolo_frame(frame):
-    """Función síncrona para inferencia de postura ejecutada en hilo secundario."""
+    """Procesamiento síncrono de postura en hilo secundario."""
     results = yolo_service.model(frame, verbose=False)
     annotated_frame = results[0].plot()
 
@@ -32,7 +31,7 @@ def process_yolo_frame(frame):
 
 
 async def generate_frames():
-    """Generador asíncrono no bloqueante para el stream MJPEG."""
+    """Generador asíncrono para el endpoint MJPEG del frontend."""
     global latest_annotated_frame
 
     while True:
@@ -44,17 +43,15 @@ async def generate_frames():
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         else:
-            # Si aún no hay frames recibidos de la ESP32, ceder control al loop
             await asyncio.sleep(0.1)
             continue
 
-        # ~20 FPS de salida en la transmisión web sin congelar FastAPI
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.04)  # ~25 FPS en el visor web
 
 
 @router.get("/video-feed")
 async def video_feed():
-    """Endpoint HTTP para visualizar la cámara procesada en tiempo real."""
+    """Endpoint HTTP para visualizar la transmisión en vivo."""
     return StreamingResponse(
         generate_frames(),
         media_type="multipart/x-mixed-replace; boundary=frame"
@@ -63,19 +60,19 @@ async def video_feed():
 
 @router.get("/health")
 def health_check():
-    """Endpoint de verificación."""
     return {"status": "ok", "service": "Guardian AI Engine"}
 
 
 @router.websocket("/ws/stream")
 async def websocket_stream(websocket: WebSocket):
-    """Recibe los frames binarios JPEG de la ESP32 y actualiza la transmisión."""
+    """Endpoint de ingesta binaria para la ESP32-S3."""
     global latest_annotated_frame
     await websocket.accept()
     print("🎥 ESP32-S3 Conectada vía WebSocket")
 
     try:
         while True:
+            # Recibir únicamente el flujo de bytes de la cámara
             data = await websocket.receive_bytes()
             if not data:
                 continue
@@ -84,12 +81,11 @@ async def websocket_stream(websocket: WebSocket):
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
             if frame is not None:
-                # Inferencia no bloqueante
+                # Procesar inferencia de postura en hilo threadpool aislado
                 annotated_frame = await asyncio.to_thread(process_yolo_frame, frame)
                 latest_annotated_frame = annotated_frame
 
-            # ACK para mantener viva la conexión WebSocket
-            await websocket.send_text("ACK")
+            # NOTA: No enviamos send_text("ACK") para no saturar/romper el socket binario en C++
 
     except WebSocketDisconnect:
         print("❌ ESP32-S3 Desconectada del WebSocket")
