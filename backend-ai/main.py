@@ -25,3 +25,13 @@ if __name__ == "__main__":
     print("🚀 Iniciando Servidor FastAPI en http://0.0.0.0:8000")
     print("📄 Documentación interactiva en http://localhost:8000/docs")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+# incluyo el router Health Check para verificar el estado del servicio
+    app = FastAPI(title="Guardian AI Engine")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "Guardian AI Engine"}
+
+app.include_router(api_router)
