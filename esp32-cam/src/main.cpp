@@ -4,19 +4,17 @@
 #include "esp_camera.h"
 #include "camera_pins.h"
 
-// Red Wi-Fi (credenciales 2.4 GHz)
 const char* ssid = "Familia-Munoz_2.4G"; 
 const char* password = "AlyPa90*";
 
-// Dirección del Backend en Render
 const char* ws_host = "guardian-ai-md9o.onrender.com"; 
-const int ws_port = 443; // Puerto SSL para https/wss
-const char* ws_path = "/api/v1/ws/stream"; // Ruta alineada con prefix="/api/v1"
+const int ws_port = 443; 
+const char* ws_path = "/api/v1/ws/stream";
 
 WebSocketsClient webSocket;
 bool isConnected = false;
 unsigned long lastFrameTime = 0;
-const int frameInterval = 100; // Envía 1 frame cada 100ms (~10 FPS)
+const int frameInterval = 200; // 5 FPS para estabilidad inicial en Render (200ms)
 
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
@@ -29,17 +27,15 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             isConnected = true;
             break;
         case WStype_TEXT:
-            Serial.printf("[WS Respuesta]: %s\n", payload);
+            // Log de confirmación del servidor
+            // Serial.printf("[WS]: %s\n", payload);
             break;
         case WStype_BIN:
             break;
         case WStype_ERROR:
             Serial.println("⚠️ Error en WebSocket");
             break;
-        case WStype_FRAGMENT_TEXT_START:
-        case WStype_FRAGMENT_BIN_START:
-        case WStype_FRAGMENT:
-        case WStype_FRAGMENT_FIN:
+        default:
             break;
     }
 }
@@ -48,7 +44,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    // Configuración de Hardware de la Cámara
+    // Configuración Cámara
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
     config.ledc_timer = LEDC_TIMER_0;
@@ -72,12 +68,12 @@ void setup() {
     config.pixel_format = PIXFORMAT_JPEG;
 
     if (psramFound()) {
-        config.frame_size = FRAMESIZE_VGA;   // 640x480
-        config.jpeg_quality = 12;            // Calidad óptima
+        config.frame_size = FRAMESIZE_VGA;
+        config.jpeg_quality = 12;
         config.fb_count = 2;
         config.grab_mode = CAMERA_GRAB_LATEST;
     } else {
-        config.frame_size = FRAMESIZE_QVGA;  // 320x240
+        config.frame_size = FRAMESIZE_QVGA;
         config.jpeg_quality = 15;
         config.fb_count = 1;
     }
@@ -94,7 +90,7 @@ void setup() {
         s->set_hmirror(s, 0);
     }
 
-    // Conexión Wi-Fi
+    // Wi-Fi
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     Serial.print("Conectando a Wi-Fi");
@@ -104,25 +100,34 @@ void setup() {
     }
     Serial.println("\n🌐 Wi-Fi Conectado");
 
-    // Cabecera Origin para validar el proxy en Render
+    // Configuración SSL WebSocket
     webSocket.setExtraHeaders("Origin: https://guardian-ai-md9o.onrender.com\r\n");
-
-    // Configuración del WebSocket SSL (wss://)
     webSocket.beginSSL(ws_host, ws_port, ws_path);
     webSocket.onEvent(webSocketEvent);
-    webSocket.setReconnectInterval(3000);
-    webSocket.enableHeartbeat(15000, 3000, 2); // Ping cada 15s
+    webSocket.setReconnectInterval(5000); // Intenta reconectar cada 5s, no de forma agresiva
+    webSocket.enableHeartbeat(10000, 3000, 2); // Ping/Pong activo cada 10s
 }
 
 void loop() {
-    webSocket.loop();
+    if (WiFi.status() == WL_CONNECTED) {
+        webSocket.loop();
 
-    if (isConnected && (millis() - lastFrameTime >= frameInterval)) {
-        camera_fb_t * fb = esp_camera_fb_get();
-        if (fb) {
-            webSocket.sendBIN(fb->buf, fb->len);
-            esp_camera_fb_return(fb);
+        // Envío seguro de frames
+        if (isConnected && (millis() - lastFrameTime >= frameInterval)) {
+            camera_fb_t * fb = esp_camera_fb_get();
+            if (fb) {
+                // Solo enviar si el buffer del socket está listo para transmitir
+                bool sent = webSocket.sendBIN(fb->buf, fb->len);
+                if (!sent) {
+                    Serial.println("⚠️ Frame no enviado (buffer lleno)");
+                }
+                // SIEMPRE liberar el buffer de la cámara para prevenir fugas de memoria
+                esp_camera_fb_return(fb);
+            }
+            lastFrameTime = millis();
         }
-        lastFrameTime = millis();
+    } else {
+        isConnected = false;
+        delay(500);
     }
 }
