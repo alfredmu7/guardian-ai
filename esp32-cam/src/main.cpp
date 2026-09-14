@@ -11,7 +11,7 @@ const char* password = "AlyPa90*";
 // Dirección del Backend en Render
 const char* ws_host = "guardian-ai-md9o.onrender.com"; 
 const int ws_port = 443; // Puerto SSL para https/wss
-const char* ws_path = "/ws/stream";
+const char* ws_path = "/api/v1/ws/stream"; // Ruta alineada con el prefix="/api/v1" de FastAPI
 
 WebSocketsClient webSocket;
 bool isConnected = false;
@@ -104,14 +104,12 @@ void setup() {
     }
     Serial.println("\n🌐 Wi-Fi Conectado");
 
-    // Forzar Host y Origin para superar la validación CORS / WebSocket en FastAPI
-webSocket.setExtraHeaders("Host: guardian-ai-md9o.onrender.com\r\nOrigin: https://guardian-ai-md9o.onrender.com\r\n");
-
     // Configuración del WebSocket SSL (wss://)
+    // beginSSL se encarga internamente del handshake y los headers SSL
     webSocket.beginSSL(ws_host, ws_port, ws_path);
     webSocket.onEvent(webSocketEvent);
     webSocket.setReconnectInterval(3000);
-    webSocket.enableHeartbeat(15000, 3000, 2); // Ping cada 15s para mantener la conexión
+    webSocket.enableHeartbeat(15000, 3000, 2); // Ping cada 15s para evitar timeout en Render
 }
 
 void loop() {
