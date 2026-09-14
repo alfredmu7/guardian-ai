@@ -1,8 +1,8 @@
-# Endpoints FastAPI para el Frontend
+# Endpoints FastAPI para el Frontend y ESP32
 
 import cv2
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from app.services.yolo_service import YOLOService
 
@@ -54,3 +54,20 @@ def video_feed():
 def health_check():
     """Endpoint de diagnóstico para saber si la API está en línea"""
     return {"status": "ok", "service": "Guardian AI Engine"}
+
+# --- ENDPOINT WEBSOCKET PARA ESP32-S3 ---
+@router.websocket("/ws/stream")
+async def websocket_stream(websocket: WebSocket):
+    """Recibe los frames binarios JPEG enviados por la ESP32-S3"""
+    await websocket.accept()
+    print("🎥 ESP32-S3 Conectada vía WebSocket")
+    try:
+        while True:
+            # Recibe el cuadro en bytes directamente desde la cámara
+            data = await websocket.receive_bytes()
+            # Aquí puedes enviar los bytes directos a tu yolo_service si es necesario
+    except WebSocketDisconnect:
+        print("❌ ESP32-S3 Desconectada del WebSocket")
+    except Exception as e:
+        print(f"⚠️ Error en WebSocket: {e}")
+        await websocket.close()

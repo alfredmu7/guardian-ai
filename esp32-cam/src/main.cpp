@@ -11,7 +11,7 @@ const char* password = "AlyPa90*";
 // Dirección del Backend en Render
 const char* ws_host = "guardian-ai-md9o.onrender.com"; 
 const int ws_port = 443; // Puerto SSL para https/wss
-const char* ws_path = "/api/v1/ws/stream"; // Ruta alineada con el prefix="/api/v1" de FastAPI
+const char* ws_path = "/api/v1/ws/stream"; // Ruta alineada con prefix="/api/v1"
 
 WebSocketsClient webSocket;
 bool isConnected = false;
@@ -104,19 +104,19 @@ void setup() {
     }
     Serial.println("\n🌐 Wi-Fi Conectado");
 
+    // Cabecera Origin para validar el proxy en Render
+    webSocket.setExtraHeaders("Origin: https://guardian-ai-md9o.onrender.com\r\n");
+
     // Configuración del WebSocket SSL (wss://)
-    // beginSSL se encarga internamente del handshake y los headers SSL
     webSocket.beginSSL(ws_host, ws_port, ws_path);
     webSocket.onEvent(webSocketEvent);
     webSocket.setReconnectInterval(3000);
-    webSocket.enableHeartbeat(15000, 3000, 2); // Ping cada 15s para evitar timeout en Render
+    webSocket.enableHeartbeat(15000, 3000, 2); // Ping cada 15s
 }
 
 void loop() {
-    // Procesa constantemente los eventos de red del WebSocket
     webSocket.loop();
 
-    // Emisión no bloqueante de frames cada 100ms
     if (isConnected && (millis() - lastFrameTime >= frameInterval)) {
         camera_fb_t * fb = esp_camera_fb_get();
         if (fb) {
