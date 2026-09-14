@@ -1,5 +1,7 @@
 # Ignorar backend-ai completo (si no lo quieres subido al repo de la cámara)
-backend-ai/
+.env
+*.env
+backend-ai/.env
 
 # Archivos pesados de modelos de IA (¡CRÍTICO para que GitHub no te bloquee!)
 *.pt
