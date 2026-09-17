@@ -3,6 +3,7 @@ uvicorn
 websockets
 opencv-python-headless
 ultralytics
+insightface
 numpy
 python-multipart
 python-dotenv

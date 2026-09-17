@@ -1,121 +1,98 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState } from 'react'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [backendStatus, setBackendStatus] = useState('checking')
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const streamUrl = '/api/v1/video-feed'
+
+  useEffect(() => {
+    let mounted = true
+
+    fetch('/api/v1/health')
+      .then((response) => {
+        if (!response.ok) throw new Error('Backend unavailable')
+        return response.json()
+      })
+      .then(() => {
+        if (mounted) {
+          setBackendStatus('online')
+          setLastUpdated(new Date())
+        }
+      })
+      .catch(() => {
+        if (mounted) setBackendStatus('offline')
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const statusLabel = {
+    checking: 'Comprobando backend',
+    online: 'Backend conectado',
+    offline: 'Backend sin respuesta',
+  }[backendStatus]
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <main className="app-shell">
+      <header className="topbar">
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+          <p className="eyebrow">GUARDIAN AI / LOCAL CONTROL</p>
+          <h1>Monitor de presencia</h1>
+        </div>
+        <div className={`status status-${backendStatus}`}>
+          <span className="status-dot" />
+          {statusLabel}
+        </div>
+      </header>
+
+      <section className="dashboard-grid">
+        <div className="video-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">CAMARA 01</p>
+              <h2>Vista en vivo</h2>
+            </div>
+            <span className="live-badge">EN DIRECTO</span>
+          </div>
+          <div className="video-frame">
+            <img
+              src={streamUrl}
+              alt="Video en vivo de la camara ESP32"
+              onLoad={() => setLastUpdated(new Date())}
+            />
+            {backendStatus === 'offline' && (
+              <div className="video-message">Esperando conexion con FastAPI</div>
+            )}
+          </div>
+          <div className="panel-footer">
+            <span>Fuente: ESP32-CAM por WebSocket</span>
+            <span>{lastUpdated ? 'Feed activo' : 'Esperando frames'}</span>
+          </div>
+        </div>
+
+        <aside className="info-panel">
+          <p className="eyebrow">ESTADO DEL SISTEMA</p>
+          <div className="metric">
+            <span>API local</span>
+            <strong>{backendStatus === 'online' ? 'Operativa' : 'Pendiente'}</strong>
+          </div>
+          <div className="metric">
+            <span>Procesamiento</span>
+            <strong>YOLOv8 Pose</strong>
+          </div>
+          <div className="metric">
+            <span>Salida</span>
+            <strong>MJPEG / 30 ms</strong>
+          </div>
+          <p className="hint">
+            La imagen aparecera cuando la ESP32 este conectada al WebSocket del backend.
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+        </aside>
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
